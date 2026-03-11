@@ -1,26 +1,26 @@
-import React, { useRef, useCallback, useState, useEffect } from 'react';
 import { useChapterGeneralSettings, useTheme } from '@hooks/persisted';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 import ReaderAppbar from './components/ReaderAppbar';
 import ReaderFooter from './components/ReaderFooter';
 import RSVPReader from './components/RSVPReader';
 
-import WebViewReader from './components/WebViewReader';
-import ReaderBottomSheetV2 from './components/ReaderBottomSheet/ReaderBottomSheet';
-import ChapterDrawer from './components/ChapterDrawer';
-import ChapterLoadingScreen from './ChapterLoadingScreen/ChapterLoadingScreen';
 import { ErrorScreenV2 } from '@components';
-import { ChapterScreenProps } from '@navigators/types';
-import { getString } from '@strings/translations';
-import KeepScreenAwake from './components/KeepScreenAwake';
-import { ChapterContextProvider, useChapterContext } from './ChapterContext';
 import { BottomSheetModalMethods } from '@gorhom/bottom-sheet/lib/typescript/types';
 import { useBackHandler } from '@hooks/index';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ChapterScreenProps } from '@navigators/types';
+import { getString } from '@strings/translations';
+import color from 'color';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Drawer } from 'react-native-drawer-layout';
 import { IconButton } from 'react-native-paper';
-import color from 'color';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ChapterContextProvider, useChapterContext } from './ChapterContext';
+import ChapterLoadingScreen from './ChapterLoadingScreen/ChapterLoadingScreen';
+import ChapterDrawer from './components/ChapterDrawer';
+import KeepScreenAwake from './components/KeepScreenAwake';
+import ReaderBottomSheetV2 from './components/ReaderBottomSheet/ReaderBottomSheet';
+import WebViewReader from './components/WebViewReader';
 
 const Chapter = ({ route, navigation }: ChapterScreenProps) => {
   const [open, setOpen] = useState(false);
@@ -71,7 +71,9 @@ export const ChapterContent = ({
   const readerSheetRef = useRef<BottomSheetModalMethods>(null);
   const theme = useTheme();
   const { pageReader = false, keepScreenOn } = useChapterGeneralSettings();
-  const [bookmarked, setBookmarked] = useState<boolean>(chapter.bookmark ?? false);
+  const [bookmarked, setBookmarked] = useState<boolean>(
+    chapter.bookmark ?? false,
+  );
   const [rsvpVisible, setRsvpVisible] = useState(false);
 
   useEffect(() => {
@@ -125,9 +127,7 @@ export const ChapterContent = ({
     );
   }
   return (
-    <View
-      style={[{ paddingStart: left, paddingEnd: right }, styles.container]}
-    >
+    <View style={[{ paddingStart: left, paddingEnd: right }, styles.container]}>
       {keepScreenOn ? <KeepScreenAwake /> : null}
       {loading ? (
         <ChapterLoadingScreen />
@@ -135,10 +135,7 @@ export const ChapterContent = ({
         <WebViewReader onPress={hideHeader} />
       )}
       <ReaderBottomSheetV2 bottomSheetRef={readerSheetRef} />
-      <RSVPReader
-        visible={rsvpVisible}
-        onClose={() => setRsvpVisible(false)}
-      />
+      <RSVPReader visible={rsvpVisible} onClose={() => setRsvpVisible(false)} />
       {!loading && !rsvpVisible ? (
         <Pressable
           onPress={() => setRsvpVisible(true)}
@@ -147,11 +144,7 @@ export const ChapterContent = ({
             { backgroundColor: color(theme.surface).alpha(0.85).string() },
           ]}
         >
-          <IconButton
-            icon="play-speed"
-            size={22}
-            iconColor={theme.primary}
-          />
+          <IconButton icon="play-speed" size={22} iconColor={theme.primary} />
         </Pressable>
       ) : null}
       {!hidden ? (

@@ -1,25 +1,25 @@
-import React, {
-  useState,
-  useEffect,
-  useRef,
-  useCallback,
-  useMemo,
-} from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  Modal,
-  Pressable,
-  StatusBar,
-  ScrollView,
-  useWindowDimensions,
-  Animated,
-} from 'react-native';
-import { IconButton, Switch } from 'react-native-paper';
+import { useTheme } from '@hooks/persisted';
 import Slider from '@react-native-community/slider';
 import color from 'color';
-import { useTheme } from '@hooks/persisted';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import {
+  Animated,
+  Modal,
+  Pressable,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
+import { IconButton, Switch } from 'react-native-paper';
 import { useChapterContext } from '../ChapterContext';
 
 interface RSVPReaderProps {
@@ -45,9 +45,33 @@ function htmlToWords(html: string): string[] {
 }
 
 const CHUNK_WORDS = new Set([
-  'a', 'an', 'the', 'i', 'is', 'am', 'in', 'on', 'at', 'to', 'of',
-  'it', 'my', 'no', 'or', 'so', 'do', 'if', 'by', 'as', 'be', 'he',
-  'we', 'up', 'us', 'me', '&',
+  'a',
+  'an',
+  'the',
+  'i',
+  'is',
+  'am',
+  'in',
+  'on',
+  'at',
+  'to',
+  'of',
+  'it',
+  'my',
+  'no',
+  'or',
+  'so',
+  'do',
+  'if',
+  'by',
+  'as',
+  'be',
+  'he',
+  'we',
+  'up',
+  'us',
+  'me',
+  '&',
 ]);
 
 function chunkWords(words: string[]): string[] {
@@ -116,7 +140,13 @@ function BionicWord({
 }) {
   if (!bionic) {
     return (
-      <Text style={{ color: boldColor, fontSize, fontWeight: fontWeight ?? 'normal' }}>
+      <Text
+        style={{
+          color: boldColor,
+          fontSize,
+          fontWeight: fontWeight ?? 'normal',
+        }}
+      >
         {word}
       </Text>
     );
@@ -141,7 +171,13 @@ function formatTime(seconds: number): string {
 }
 
 /** Reusable focus ruler: two horizontal lines with a center tick mark */
-function FocusRuler({ primaryColor, width }: { primaryColor: string; width: string | number }) {
+function FocusRuler({
+  primaryColor,
+  width,
+}: {
+  primaryColor: string;
+  width: string | number;
+}) {
   return (
     <View style={[rulerStyles.container, { width: width as any }]}>
       <View style={[rulerStyles.line, { backgroundColor: primaryColor }]} />
@@ -224,9 +260,15 @@ const RSVPReader = ({ visible, onClose }: RSVPReaderProps) => {
   const wpmRef = useRef(wpm);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => { indexRef.current = currentIndex; }, [currentIndex]);
-  useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
-  useEffect(() => { wpmRef.current = wpm; }, [wpm]);
+  useEffect(() => {
+    indexRef.current = currentIndex;
+  }, [currentIndex]);
+  useEffect(() => {
+    isPlayingRef.current = isPlaying;
+  }, [isPlaying]);
+  useEffect(() => {
+    wpmRef.current = wpm;
+  }, [wpm]);
 
   useEffect(() => {
     setCurrentIndex(0);
@@ -363,16 +405,33 @@ const RSVPReader = ({ visible, onClose }: RSVPReaderProps) => {
           <View style={styles.spritzRow}>
             <View style={[styles.spritzLeft, { width: halfWidth }]}>
               <Text style={{ fontSize, fontFamily: 'monospace' }}>
-                <Text style={{ fontWeight: bBefore.length > 0 ? 'bold' : 'normal', color: theme.onSurface }}>
+                <Text
+                  style={{
+                    fontWeight: bBefore.length > 0 ? 'bold' : 'normal',
+                    color: theme.onSurface,
+                  }}
+                >
                   {bBefore}
                 </Text>
-                <Text style={{ fontWeight: 'normal', color: theme.onSurfaceVariant }}>
+                <Text
+                  style={{
+                    fontWeight: 'normal',
+                    color: theme.onSurfaceVariant,
+                  }}
+                >
                   {before.slice(bBefore.length)}
                 </Text>
               </Text>
             </View>
             <View style={styles.spritzCenter}>
-              <Text style={{ fontSize: fontSize + 4, fontWeight: bOrp, color: theme.primary, fontFamily: 'monospace' }}>
+              <Text
+                style={{
+                  fontSize: fontSize + 4,
+                  fontWeight: bOrp,
+                  color: theme.primary,
+                  fontFamily: 'monospace',
+                }}
+              >
                 {orpChar}
               </Text>
             </View>
@@ -381,7 +440,12 @@ const RSVPReader = ({ visible, onClose }: RSVPReaderProps) => {
                 <Text style={{ fontWeight: 'bold', color: theme.onSurface }}>
                   {after.slice(0, bAfter)}
                 </Text>
-                <Text style={{ fontWeight: 'normal', color: theme.onSurfaceVariant }}>
+                <Text
+                  style={{
+                    fontWeight: 'normal',
+                    color: theme.onSurfaceVariant,
+                  }}
+                >
                   {after.slice(bAfter)}
                 </Text>
               </Text>
@@ -397,17 +461,26 @@ const RSVPReader = ({ visible, onClose }: RSVPReaderProps) => {
         <FocusRuler primaryColor={theme.primary} width="70%" />
         <View style={styles.spritzRow}>
           <View style={[styles.spritzLeft, { width: halfWidth }]}>
-            <Text style={[styles.spritzText, { color: theme.onSurface, fontSize }]}>
+            <Text
+              style={[styles.spritzText, { color: theme.onSurface, fontSize }]}
+            >
               {before}
             </Text>
           </View>
           <View style={styles.spritzCenter}>
-            <Text style={[styles.spritzPivot, { color: theme.primary, fontSize: fontSize + 4 }]}>
+            <Text
+              style={[
+                styles.spritzPivot,
+                { color: theme.primary, fontSize: fontSize + 4 },
+              ]}
+            >
               {orpChar}
             </Text>
           </View>
           <View style={[styles.spritzRight, { width: halfWidth }]}>
-            <Text style={[styles.spritzText, { color: theme.onSurface, fontSize }]}>
+            <Text
+              style={[styles.spritzText, { color: theme.onSurface, fontSize }]}
+            >
               {after}
             </Text>
           </View>
@@ -423,7 +496,9 @@ const RSVPReader = ({ visible, onClose }: RSVPReaderProps) => {
     if (countdown > 0) {
       return (
         <View style={styles.scrollVArea}>
-          <Text style={[styles.countdownText, { color: theme.primary }]}>{countdown}</Text>
+          <Text style={[styles.countdownText, { color: theme.primary }]}>
+            {countdown}
+          </Text>
         </View>
       );
     }
@@ -444,7 +519,9 @@ const RSVPReader = ({ visible, onClose }: RSVPReaderProps) => {
           const lineOpacity = 1 - distFromCenter * 0.15;
           return (
             <View key={`line-${li}`}>
-              {isCenterLine && <FocusRuler primaryColor={theme.primary} width="80%" />}
+              {isCenterLine && (
+                <FocusRuler primaryColor={theme.primary} width="80%" />
+              )}
               <View
                 style={[
                   styles.scrollVLine,
@@ -455,7 +532,13 @@ const RSVPReader = ({ visible, onClose }: RSVPReaderProps) => {
                   const globalIdx = lineStart + wi;
                   if (globalIdx < 0 || globalIdx >= words.length) {
                     return (
-                      <Text key={`sp-${li}-${wi}`} style={{ marginHorizontal: 3, fontSize: fontSize * 0.5 }}>
+                      <Text
+                        key={`sp-${li}-${wi}`}
+                        style={{
+                          marginHorizontal: 3,
+                          fontSize: fontSize * 0.5,
+                        }}
+                      >
                         {'  '}
                       </Text>
                     );
@@ -479,7 +562,9 @@ const RSVPReader = ({ visible, onClose }: RSVPReaderProps) => {
                   );
                 })}
               </View>
-              {isCenterLine && <FocusRuler primaryColor={theme.primary} width="80%" />}
+              {isCenterLine && (
+                <FocusRuler primaryColor={theme.primary} width="80%" />
+              )}
             </View>
           );
         })}
@@ -493,7 +578,9 @@ const RSVPReader = ({ visible, onClose }: RSVPReaderProps) => {
     if (countdown > 0) {
       return (
         <View style={styles.scrollHArea}>
-          <Text style={[styles.countdownText, { color: theme.primary }]}>{countdown}</Text>
+          <Text style={[styles.countdownText, { color: theme.primary }]}>
+            {countdown}
+          </Text>
         </View>
       );
     }
@@ -513,16 +600,22 @@ const RSVPReader = ({ visible, onClose }: RSVPReaderProps) => {
               return (
                 <View
                   key={`sp-h-${i}`}
-                  style={[styles.scrollHWord, { marginHorizontal: lineSpacing * 3 }]}
+                  style={[
+                    styles.scrollHWord,
+                    { marginHorizontal: lineSpacing * 3 },
+                  ]}
                 >
-                  <Text style={{ fontSize: fontSize * 0.6 }}>{' '}</Text>
+                  <Text style={{ fontSize: fontSize * 0.6 }}> </Text>
                 </View>
               );
             }
             return (
               <View
                 key={`h-${globalIdx}`}
-                style={[styles.scrollHWord, { marginHorizontal: lineSpacing * 3 }]}
+                style={[
+                  styles.scrollHWord,
+                  { marginHorizontal: lineSpacing * 3 },
+                ]}
               >
                 <BionicWord
                   word={words[globalIdx]}
@@ -551,7 +644,10 @@ const RSVPReader = ({ visible, onClose }: RSVPReaderProps) => {
     const avgWordChars = 5;
     const wordMargin = 10;
     const available = screenWidth - 40;
-    return Math.max(3, Math.floor(available / (avgCharWidth * avgWordChars + wordMargin)));
+    return Math.max(
+      3,
+      Math.floor(available / (avgCharWidth * avgWordChars + wordMargin)),
+    );
   }, [fontSize, screenWidth]);
 
   const renderDisplay = () => {
@@ -581,7 +677,9 @@ const RSVPReader = ({ visible, onClose }: RSVPReaderProps) => {
           isLandscape ? styles.landscapeSettingsBarContent : undefined
         }
       >
-        <View style={isLandscape ? styles.settingsRowLandscape : styles.settingsRow}>
+        <View
+          style={isLandscape ? styles.settingsRowLandscape : styles.settingsRow}
+        >
           <View style={styles.viewStyleRow}>
             {VIEW_STYLES.map(vs => {
               const active = viewStyle === vs.key;
@@ -621,9 +719,7 @@ const RSVPReader = ({ visible, onClose }: RSVPReaderProps) => {
         </View>
       </ScrollView>
       {/* Display */}
-      <View style={styles.displayArea}>
-        {renderDisplay()}
-      </View>
+      <View style={styles.displayArea}>{renderDisplay()}</View>
       {renderBottomBar()}
     </>
   );
@@ -633,11 +729,15 @@ const RSVPReader = ({ visible, onClose }: RSVPReaderProps) => {
       {/* Progress + time remaining */}
       <View style={styles.progressSection}>
         <View style={styles.progressInfo}>
-          <Text style={[styles.progressText, { color: theme.onSurfaceVariant }]}>
+          <Text
+            style={[styles.progressText, { color: theme.onSurfaceVariant }]}
+          >
             {Math.min(currentIndex + 1, words.length)} / {words.length} (
             {progress.toFixed(1)}%)
           </Text>
-          <Text style={[styles.progressText, { color: theme.onSurfaceVariant }]}>
+          <Text
+            style={[styles.progressText, { color: theme.onSurfaceVariant }]}
+          >
             {timeRemaining} left
           </Text>
         </View>
@@ -668,7 +768,15 @@ const RSVPReader = ({ visible, onClose }: RSVPReaderProps) => {
             onPress={() => setWpm(c => Math.max(MIN_WPM, c - WPM_STEP))}
             style={[styles.wpmBtn, { borderColor: theme.outline }]}
           >
-            <Text style={{ color: theme.onSurface, fontSize: 20, fontWeight: 'bold' }}>−</Text>
+            <Text
+              style={{
+                color: theme.onSurface,
+                fontSize: 20,
+                fontWeight: 'bold',
+              }}
+            >
+              −
+            </Text>
           </Pressable>
 
           <View style={styles.playCol}>
@@ -692,7 +800,15 @@ const RSVPReader = ({ visible, onClose }: RSVPReaderProps) => {
             onPress={() => setWpm(c => Math.min(MAX_WPM, c + WPM_STEP))}
             style={[styles.wpmBtn, { borderColor: theme.outline }]}
           >
-            <Text style={{ color: theme.onSurface, fontSize: 20, fontWeight: 'bold' }}>+</Text>
+            <Text
+              style={{
+                color: theme.onSurface,
+                fontSize: 20,
+                fontWeight: 'bold',
+              }}
+            >
+              +
+            </Text>
           </Pressable>
         </View>
 
@@ -745,7 +861,10 @@ const RSVPReader = ({ visible, onClose }: RSVPReaderProps) => {
         {showBottomSheet && (
           <View style={StyleSheet.absoluteFill}>
             {/* Backdrop */}
-            <Pressable style={styles.sheetBackdrop} onPress={closeBottomSheet} />
+            <Pressable
+              style={styles.sheetBackdrop}
+              onPress={closeBottomSheet}
+            />
             {/* Sheet */}
             <Animated.View
               style={[
@@ -765,27 +884,62 @@ const RSVPReader = ({ visible, onClose }: RSVPReaderProps) => {
             >
               {/* Handle */}
               <View style={styles.sheetHandle}>
-                <View style={[styles.sheetHandleBar, { backgroundColor: theme.outline }]} />
+                <View
+                  style={[
+                    styles.sheetHandleBar,
+                    { backgroundColor: theme.outline },
+                  ]}
+                />
               </View>
 
-              <ScrollView style={styles.sheetScroll} showsVerticalScrollIndicator={false}>
+              <ScrollView
+                style={styles.sheetScroll}
+                showsVerticalScrollIndicator={false}
+              >
                 {/* Toggles */}
                 <View style={styles.sheetSection}>
                   <View style={styles.sheetRow}>
-                    <Text style={[styles.sheetLabel, { color: theme.onSurface }]}>Bionic Reading</Text>
-                    <Switch value={bionic} onValueChange={setBionic} color={theme.primary} />
+                    <Text
+                      style={[styles.sheetLabel, { color: theme.onSurface }]}
+                    >
+                      Bionic Reading
+                    </Text>
+                    <Switch
+                      value={bionic}
+                      onValueChange={setBionic}
+                      color={theme.primary}
+                    />
                   </View>
                   <View style={styles.sheetRow}>
-                    <Text style={[styles.sheetLabel, { color: theme.onSurface }]}>Word Chunking</Text>
-                    <Switch value={chunking} onValueChange={setChunking} color={theme.primary} />
+                    <Text
+                      style={[styles.sheetLabel, { color: theme.onSurface }]}
+                    >
+                      Word Chunking
+                    </Text>
+                    <Switch
+                      value={chunking}
+                      onValueChange={setChunking}
+                      color={theme.primary}
+                    />
                   </View>
                 </View>
 
                 {/* Font size */}
                 <View style={styles.sheetSection}>
-                  <Text style={[styles.sheetSectionTitle, { color: theme.onSurfaceVariant }]}>Font Size</Text>
+                  <Text
+                    style={[
+                      styles.sheetSectionTitle,
+                      { color: theme.onSurfaceVariant },
+                    ]}
+                  >
+                    Font Size
+                  </Text>
                   <View style={styles.sheetSliderRow}>
-                    <Text style={[styles.sheetValue, { color: theme.onSurface }]}>{fontSize}</Text>
+                    <Text
+                      style={[styles.sheetValue, { color: theme.onSurface }]}
+                    >
+                      {fontSize}
+                    </Text>
                     <Slider
                       style={styles.sheetSlider}
                       minimumValue={MIN_FONT}
@@ -802,16 +956,29 @@ const RSVPReader = ({ visible, onClose }: RSVPReaderProps) => {
 
                 {/* Line spacing */}
                 <View style={styles.sheetSection}>
-                  <Text style={[styles.sheetSectionTitle, { color: theme.onSurfaceVariant }]}>Line Spacing</Text>
+                  <Text
+                    style={[
+                      styles.sheetSectionTitle,
+                      { color: theme.onSurfaceVariant },
+                    ]}
+                  >
+                    Line Spacing
+                  </Text>
                   <View style={styles.sheetSliderRow}>
-                    <Text style={[styles.sheetValue, { color: theme.onSurface }]}>{lineSpacing.toFixed(2)}</Text>
+                    <Text
+                      style={[styles.sheetValue, { color: theme.onSurface }]}
+                    >
+                      {lineSpacing.toFixed(2)}
+                    </Text>
                     <Slider
                       style={styles.sheetSlider}
                       minimumValue={MIN_LINE_SPACING}
                       maximumValue={MAX_LINE_SPACING}
                       step={0.25}
                       value={lineSpacing}
-                      onValueChange={v => setLineSpacing(Math.round(v * 100) / 100)}
+                      onValueChange={v =>
+                        setLineSpacing(Math.round(v * 100) / 100)
+                      }
                       minimumTrackTintColor={theme.primary}
                       maximumTrackTintColor={theme.outline}
                       thumbTintColor={theme.primary}
@@ -839,7 +1006,12 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingHorizontal: 4,
   },
-  headerTitle: { flex: 1, fontSize: 16, fontWeight: '600', textAlign: 'center' },
+  headerTitle: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
   headerSpacer: { width: 48 },
 
   /* Landscape layout — compact horizontal settings bar */
@@ -882,7 +1054,11 @@ const styles = StyleSheet.create({
   displayArea: { flex: 1, justifyContent: 'center' },
 
   /* Flash / Spritz view */
-  flashArea: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
+  flashArea: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
   spritzRow: {
     flexDirection: 'row',
     alignItems: 'baseline',

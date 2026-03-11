@@ -1,18 +1,18 @@
+import { SCREEN_HEIGHT } from '@gorhom/bottom-sheet';
+import { BottomSheetModalMethods } from '@gorhom/bottom-sheet/lib/typescript/types';
+import { useTheme } from '@hooks/persisted';
+import { ChapterScreenProps } from '@navigators/types';
+import { useNovelContext } from '@screens/novel/NovelContext';
+import color from 'color';
 import React, { useMemo } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { IconButton } from 'react-native-paper';
-import color from 'color';
 import Animated, {
   Easing,
   ReduceMotion,
   withTiming,
 } from 'react-native-reanimated';
-import { BottomSheetModalMethods } from '@gorhom/bottom-sheet/lib/typescript/types';
-import { ChapterScreenProps } from '@navigators/types';
 import { useChapterContext } from '../ChapterContext';
-import { SCREEN_HEIGHT } from '@gorhom/bottom-sheet';
-import { useNovelContext } from '@screens/novel/NovelContext';
-import { useTheme } from '@hooks/persisted';
 
 interface ChapterFooterProps {
   readerSheetRef: React.RefObject<BottomSheetModalMethods | null>;
@@ -152,11 +152,7 @@ const ChapterFooter = ({
           style={styles.buttonStyles}
           onPress={onOpenRSVP}
         >
-          <IconButton
-            icon="play-speed"
-            size={26}
-            iconColor={theme.onSurface}
-          />
+          <IconButton icon="play-speed" size={26} iconColor={theme.onSurface} />
         </Pressable>
         <Pressable
           android_ripple={rippleConfig}

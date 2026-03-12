@@ -10,10 +10,8 @@ import { BottomSheetModalMethods } from '@gorhom/bottom-sheet/lib/typescript/typ
 import { useBackHandler } from '@hooks/index';
 import { ChapterScreenProps } from '@navigators/types';
 import { getString } from '@strings/translations';
-import color from 'color';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { Drawer } from 'react-native-drawer-layout';
-import { IconButton } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChapterContextProvider, useChapterContext } from './ChapterContext';
 import ChapterLoadingScreen from './ChapterLoadingScreen/ChapterLoadingScreen';
@@ -136,17 +134,6 @@ export const ChapterContent = ({
       )}
       <ReaderBottomSheetV2 bottomSheetRef={readerSheetRef} />
       <RSVPReader visible={rsvpVisible} onClose={() => setRsvpVisible(false)} />
-      {!loading && !rsvpVisible ? (
-        <Pressable
-          onPress={() => setRsvpVisible(true)}
-          style={[
-            styles.rsvpFab,
-            { backgroundColor: color(theme.surface).alpha(0.85).string() },
-          ]}
-        >
-          <IconButton icon="play-speed" size={22} iconColor={theme.primary} />
-        </Pressable>
-      ) : null}
       {!hidden ? (
         <>
           <ReaderAppbar
@@ -172,16 +159,4 @@ export default Chapter;
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  rsvpFab: {
-    position: 'absolute',
-    bottom: 16,
-    right: 16,
-    borderRadius: 24,
-    width: 48,
-    height: 48,
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 4,
-    zIndex: 2,
-  },
 });

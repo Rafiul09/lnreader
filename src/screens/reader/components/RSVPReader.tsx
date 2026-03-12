@@ -1,5 +1,10 @@
-import { useTheme } from '@hooks/persisted';
+import {
+  useChapterGeneralSettings,
+  useChapterReaderSettings,
+  useTheme,
+} from '@hooks/persisted';
 import Slider from '@react-native-community/slider';
+import { readerFonts } from '@utils/constants/readerConstants';
 import color from 'color';
 import React, {
   useCallback,
@@ -130,6 +135,7 @@ function BionicWord({
   restColor,
   fontSize,
   fontWeight,
+  fontFamily,
 }: {
   word: string;
   bionic: boolean;
@@ -137,6 +143,7 @@ function BionicWord({
   restColor: string;
   fontSize: number;
   fontWeight?: 'bold' | 'normal';
+  fontFamily?: string;
 }) {
   if (!bionic) {
     return (
@@ -145,6 +152,7 @@ function BionicWord({
           color: boldColor,
           fontSize,
           fontWeight: fontWeight ?? 'normal',
+          fontFamily: fontFamily || undefined,
         }}
       >
         {word}
@@ -153,7 +161,7 @@ function BionicWord({
   }
   const bLen = bionicBoldLen(word);
   return (
-    <Text>
+    <Text style={{ fontFamily: fontFamily || undefined }}>
       <Text style={{ fontWeight: 'bold', color: boldColor, fontSize }}>
         {word.slice(0, bLen)}
       </Text>
@@ -222,17 +230,20 @@ const MIN_FONT = 16;
 const MAX_FONT = 48;
 const DEFAULT_FONT = 36;
 
-const VIEW_STYLES: { key: RSVPViewStyle; label: string; icon: string }[] = [
-  { key: 'flash', label: 'Flash', icon: 'flash' },
-  { key: 'scroll-v', label: 'Vertical', icon: 'arrow-expand-vertical' },
-  { key: 'scroll-h', label: 'Horizontal', icon: 'arrow-expand-horizontal' },
+const VIEW_STYLES: { key: RSVPViewStyle; icon: string }[] = [
+  { key: 'flash', icon: 'flash' },
+  { key: 'scroll-v', icon: 'arrow-expand-vertical' },
+  { key: 'scroll-h', icon: 'arrow-expand-horizontal' },
 ];
 
 // ─── Component ──────────────────────────────────────────────
 
 const RSVPReader = ({ visible, onClose }: RSVPReaderProps) => {
   const theme = useTheme();
-  const { chapterText, chapter } = useChapterContext();
+  const { chapterText, chapter, saveProgress, webViewRef } =
+    useChapterContext();
+  const { bionicReading, pageReader } = useChapterGeneralSettings();
+  const { fontFamily: readerFontFamily } = useChapterReaderSettings();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const isLandscape = screenWidth > screenHeight;
   const rawWords = useMemo(() => htmlToWords(chapterText), [chapterText]);
@@ -240,15 +251,19 @@ const RSVPReader = ({ visible, onClose }: RSVPReaderProps) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [wpm, setWpm] = useState(DEFAULT_WPM);
-  const [bionic, setBionic] = useState(false);
+  const [bionic, setBionic] = useState(bionicReading);
   const [viewStyle, setViewStyle] = useState<RSVPViewStyle>('flash');
   const [lineSpacing, setLineSpacing] = useState(DEFAULT_LINE_SPACING);
   const [fontSize, setFontSize] = useState(DEFAULT_FONT);
+  const [fontFamily, setFontFamily] = useState(readerFontFamily);
   const [chunking, setChunking] = useState(true);
   const [countdown, setCountdown] = useState(0);
   const [showBottomSheet, setShowBottomSheet] = useState(false);
   const sheetAnim = useRef(new Animated.Value(0)).current;
   const pendingPlayRef = useRef(false);
+  const [controlsVisible, setControlsVisible] = useState(true);
+  const controlsAnim = useRef(new Animated.Value(1)).current;
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const words = useMemo(
     () => (chunking ? chunkWords(rawWords) : rawWords),
@@ -270,10 +285,34 @@ const RSVPReader = ({ visible, onClose }: RSVPReaderProps) => {
     wpmRef.current = wpm;
   }, [wpm]);
 
+  // When chapter text changes, reset to beginning
   useEffect(() => {
     setCurrentIndex(0);
     setIsPlaying(false);
   }, [chapterText]);
+
+  // When RSVP opens, resume from reader's saved progress
+  useEffect(() => {
+    if (visible && words.length > 0 && chapter.progress) {
+      const idx = Math.min(
+        Math.floor(words.length * (chapter.progress / 100)),
+        words.length - 1,
+      );
+      setCurrentIndex(idx);
+      indexRef.current = idx;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
+
+  // Sync bionic toggle when reader setting changes
+  useEffect(() => {
+    setBionic(bionicReading);
+  }, [bionicReading]);
+
+  // Sync font family when reader setting changes
+  useEffect(() => {
+    setFontFamily(readerFontFamily);
+  }, [readerFontFamily]);
 
   const timeRemaining = useMemo(() => {
     const remaining = words.length - currentIndex;
@@ -346,12 +385,48 @@ const RSVPReader = ({ visible, onClose }: RSVPReaderProps) => {
     startWithCountdown();
   }, [isPlaying, startWithCountdown]);
 
+  // Save progress back to reader on pause or every 10 words
+  useEffect(() => {
+    if (words.length > 0 && currentIndex > 0) {
+      const pct = Math.min(
+        Math.floor(((currentIndex + 1) / words.length) * 100),
+        100,
+      );
+      if (!isPlaying || currentIndex % 10 === 0) {
+        saveProgress(pct);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentIndex, isPlaying]);
+
   const handleClose = useCallback(() => {
     setIsPlaying(false);
     setCountdown(0);
     setShowBottomSheet(false);
+    // Save final progress on close and sync WebView scroll position
+    if (words.length > 0) {
+      const pct = Math.min(
+        Math.floor(((indexRef.current + 1) / words.length) * 100),
+        100,
+      );
+      saveProgress(pct);
+      requestAnimationFrame(() => {
+        webViewRef?.current?.injectJavaScript(
+          pageReader
+            ? `(()=>{
+                reader.chapter.progress = ${pct};
+                var p = Math.max(0, Math.round((pageReader.totalPages.val * ${pct}) / 100) - 1);
+                pageReader.movePage(p);
+              })()`
+            : `(()=>{
+                reader.chapter.progress = ${pct};
+                window.scrollTo({ top: (reader.chapterHeight * ${pct}) / 100 - reader.layoutHeight, behavior: 'smooth' });
+              })()`,
+        );
+      });
+    }
     onClose();
-  }, [onClose]);
+  }, [onClose, words.length, saveProgress, webViewRef, pageReader]);
 
   const openBottomSheet = useCallback(() => {
     setShowBottomSheet(true);
@@ -370,6 +445,58 @@ const RSVPReader = ({ visible, onClose }: RSVPReaderProps) => {
       useNativeDriver: true,
     }).start(() => setShowBottomSheet(false));
   }, [sheetAnim]);
+
+  // ── Auto-hide controls ──
+
+  const clearHideTimer = useCallback(() => {
+    if (hideTimerRef.current) {
+      clearTimeout(hideTimerRef.current);
+      hideTimerRef.current = null;
+    }
+  }, []);
+
+  const hideControls = useCallback(() => {
+    clearHideTimer();
+    Animated.timing(controlsAnim, {
+      toValue: 0,
+      duration: 250,
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (finished) setControlsVisible(false);
+    });
+  }, [controlsAnim, clearHideTimer]);
+
+  const showControls = useCallback(() => {
+    clearHideTimer();
+    setControlsVisible(true);
+    Animated.timing(controlsAnim, {
+      toValue: 1,
+      duration: 200,
+      useNativeDriver: true,
+    }).start();
+  }, [controlsAnim, clearHideTimer]);
+
+  const scheduleHide = useCallback(() => {
+    clearHideTimer();
+    hideTimerRef.current = setTimeout(hideControls, 2000);
+  }, [clearHideTimer, hideControls]);
+
+  // Auto-hide 2s after playback starts; show when paused
+  useEffect(() => {
+    if (isPlaying && !showBottomSheet) {
+      scheduleHide();
+    } else {
+      showControls();
+    }
+    return clearHideTimer;
+  }, [isPlaying, showBottomSheet, scheduleHide, showControls, clearHideTimer]);
+
+  // Tap on display area: pause if playing, otherwise do nothing
+  const handleDisplayTap = useCallback(() => {
+    if (isPlayingRef.current) {
+      setIsPlaying(false);
+    }
+  }, []);
 
   const progress =
     words.length > 0 ? ((currentIndex + 1) / words.length) * 100 : 0;
@@ -404,7 +531,7 @@ const RSVPReader = ({ visible, onClose }: RSVPReaderProps) => {
           <FocusRuler primaryColor={theme.primary} width="70%" />
           <View style={styles.spritzRow}>
             <View style={[styles.spritzLeft, { width: halfWidth }]}>
-              <Text style={{ fontSize, fontFamily: 'monospace' }}>
+              <Text style={{ fontSize, fontFamily: fontFamily || 'monospace' }}>
                 <Text
                   style={{
                     fontWeight: bBefore.length > 0 ? 'bold' : 'normal',
@@ -429,14 +556,14 @@ const RSVPReader = ({ visible, onClose }: RSVPReaderProps) => {
                   fontSize: fontSize + 4,
                   fontWeight: bOrp,
                   color: theme.primary,
-                  fontFamily: 'monospace',
+                  fontFamily: fontFamily || 'monospace',
                 }}
               >
                 {orpChar}
               </Text>
             </View>
             <View style={[styles.spritzRight, { width: halfWidth }]}>
-              <Text style={{ fontSize, fontFamily: 'monospace' }}>
+              <Text style={{ fontSize, fontFamily: fontFamily || 'monospace' }}>
                 <Text style={{ fontWeight: 'bold', color: theme.onSurface }}>
                   {after.slice(0, bAfter)}
                 </Text>
@@ -462,7 +589,14 @@ const RSVPReader = ({ visible, onClose }: RSVPReaderProps) => {
         <View style={styles.spritzRow}>
           <View style={[styles.spritzLeft, { width: halfWidth }]}>
             <Text
-              style={[styles.spritzText, { color: theme.onSurface, fontSize }]}
+              style={[
+                styles.spritzText,
+                {
+                  color: theme.onSurface,
+                  fontSize,
+                  fontFamily: fontFamily || 'monospace',
+                },
+              ]}
             >
               {before}
             </Text>
@@ -471,7 +605,11 @@ const RSVPReader = ({ visible, onClose }: RSVPReaderProps) => {
             <Text
               style={[
                 styles.spritzPivot,
-                { color: theme.primary, fontSize: fontSize + 4 },
+                {
+                  color: theme.primary,
+                  fontSize: fontSize + 4,
+                  fontFamily: fontFamily || 'monospace',
+                },
               ]}
             >
               {orpChar}
@@ -479,7 +617,14 @@ const RSVPReader = ({ visible, onClose }: RSVPReaderProps) => {
           </View>
           <View style={[styles.spritzRight, { width: halfWidth }]}>
             <Text
-              style={[styles.spritzText, { color: theme.onSurface, fontSize }]}
+              style={[
+                styles.spritzText,
+                {
+                  color: theme.onSurface,
+                  fontSize,
+                  fontFamily: fontFamily || 'monospace',
+                },
+              ]}
             >
               {after}
             </Text>
@@ -557,6 +702,7 @@ const RSVPReader = ({ visible, onClose }: RSVPReaderProps) => {
                         }
                         fontSize={isActive ? fontSize * 0.7 : fontSize * 0.5}
                         fontWeight={isActive ? 'bold' : 'normal'}
+                        fontFamily={fontFamily}
                       />
                     </Text>
                   );
@@ -628,6 +774,7 @@ const RSVPReader = ({ visible, onClose }: RSVPReaderProps) => {
                   }
                   fontSize={isCenter ? fontSize : fontSize * 0.6}
                   fontWeight={isCenter ? 'bold' : 'normal'}
+                  fontFamily={fontFamily}
                 />
               </View>
             );
@@ -663,166 +810,226 @@ const RSVPReader = ({ visible, onClose }: RSVPReaderProps) => {
 
   // ── Render ──
 
-  const renderBody = () => (
-    <>
-      {/* View style selector */}
-      <ScrollView
-        horizontal={isLandscape}
-        showsHorizontalScrollIndicator={false}
-        style={[
-          { flexGrow: 0 },
-          isLandscape ? styles.landscapeSettingsBar : undefined,
-        ]}
-        contentContainerStyle={
-          isLandscape ? styles.landscapeSettingsBarContent : undefined
-        }
+  const renderHeader = () => (
+    <View style={isLandscape ? styles.headerLandscape : styles.header}>
+      {isLandscape && (
+        <IconButton
+          icon="arrow-left"
+          size={24}
+          iconColor={theme.onSurface}
+          onPress={handleClose}
+          style={styles.backButtonLandscape}
+        />
+      )}
+      {!isLandscape && (
+        <IconButton
+          icon="arrow-left"
+          size={24}
+          iconColor={theme.onSurface}
+          onPress={handleClose}
+        />
+      )}
+      <View
+        style={isLandscape ? styles.viewStyleRowLandscape : styles.viewStyleRow}
       >
-        <View
-          style={isLandscape ? styles.settingsRowLandscape : styles.settingsRow}
-        >
-          <View style={styles.viewStyleRow}>
-            {VIEW_STYLES.map(vs => {
-              const active = viewStyle === vs.key;
-              return (
-                <Pressable
-                  key={vs.key}
-                  onPress={() => setViewStyle(vs.key)}
-                  style={[
-                    styles.viewStyleChip,
-                    {
-                      backgroundColor: active
-                        ? color(theme.primary).alpha(0.15).string()
-                        : 'transparent',
-                      borderColor: active ? theme.primary : theme.outline,
-                    },
-                  ]}
-                >
-                  <IconButton
-                    icon={vs.icon}
-                    size={16}
-                    iconColor={active ? theme.primary : theme.onSurfaceVariant}
-                    style={styles.chipIcon}
-                  />
-                  <Text
-                    style={{
-                      fontSize: 12,
-                      fontWeight: '600',
-                      color: active ? theme.primary : theme.onSurfaceVariant,
-                    }}
-                  >
-                    {vs.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
-      </ScrollView>
-      {/* Display */}
-      <View style={styles.displayArea}>{renderDisplay()}</View>
-      {renderBottomBar()}
-    </>
+        {VIEW_STYLES.map(vs => {
+          const active = viewStyle === vs.key;
+          return (
+            <Pressable
+              key={vs.key}
+              onPress={() => setViewStyle(vs.key)}
+              style={[
+                styles.viewStyleChip,
+                {
+                  backgroundColor: active
+                    ? color(theme.primary).alpha(0.15).string()
+                    : 'transparent',
+                  borderColor: active ? theme.primary : theme.outline,
+                },
+              ]}
+            >
+              <IconButton
+                icon={vs.icon}
+                size={18}
+                iconColor={active ? theme.primary : theme.onSurfaceVariant}
+                style={styles.chipIcon}
+              />
+            </Pressable>
+          );
+        })}
+      </View>
+      {!isLandscape && <View style={styles.headerSpacer} />}
+    </View>
+  );
+
+  const renderProgressInfo = () => (
+    <View style={styles.progressInfoLandscape}>
+      <Text style={[styles.progressText, { color: theme.onSurfaceVariant }]}>
+        {Math.min(currentIndex + 1, words.length)} / {words.length}
+      </Text>
+      <Text style={[styles.progressText, { color: theme.onSurfaceVariant }]}>
+        {progress.toFixed(1)}%
+      </Text>
+      <Text style={[styles.progressText, { color: theme.onSurfaceVariant }]}>
+        {timeRemaining}
+      </Text>
+    </View>
   );
 
   const renderBottomBar = () => (
-    <>
-      {/* Progress + time remaining */}
-      <View style={styles.progressSection}>
-        <View style={styles.progressInfo}>
-          <Text
-            style={[styles.progressText, { color: theme.onSurfaceVariant }]}
-          >
-            {Math.min(currentIndex + 1, words.length)} / {words.length} (
-            {progress.toFixed(1)}%)
-          </Text>
-          <Text
-            style={[styles.progressText, { color: theme.onSurfaceVariant }]}
-          >
-            {timeRemaining} left
-          </Text>
-        </View>
-        <Slider
-          style={styles.progressSlider}
-          minimumValue={0}
-          maximumValue={Math.max(words.length - 1, 1)}
-          value={currentIndex}
-          onSlidingStart={() => setIsPlaying(false)}
-          onSlidingComplete={val => {
-            const idx = Math.round(val);
-            setCurrentIndex(idx);
-            indexRef.current = idx;
-          }}
-          minimumTrackTintColor={theme.primary}
-          maximumTrackTintColor={theme.surfaceVariant}
-          thumbTintColor={theme.primary}
-        />
-      </View>
-
-      {/* Controls: centered WPM−/Play/WPM+, gear pinned right */}
-      <View style={styles.controls}>
-        {/* Left spacer to balance the gear on the right */}
-        <View style={styles.controlsEdge} />
-
-        <View style={styles.controlsCenter}>
-          <Pressable
-            onPress={() => setWpm(c => Math.max(MIN_WPM, c - WPM_STEP))}
-            style={[styles.wpmBtn, { borderColor: theme.outline }]}
-          >
+    <View style={isLandscape ? styles.bottomBarLandscape : undefined}>
+      {/* Progress + time remaining (portrait only; landscape uses overlay) */}
+      {!isLandscape && (
+        <View style={styles.progressSection}>
+          <View style={styles.progressInfo}>
             <Text
-              style={{
-                color: theme.onSurface,
-                fontSize: 20,
-                fontWeight: 'bold',
-              }}
+              style={[styles.progressText, { color: theme.onSurfaceVariant }]}
             >
-              −
+              {Math.min(currentIndex + 1, words.length)} / {words.length}
             </Text>
-          </Pressable>
-
-          <View style={styles.playCol}>
-            <Pressable
-              onPress={togglePlay}
-              style={[styles.playButton, { backgroundColor: theme.primary }]}
+            <Text
+              style={[styles.progressText, { color: theme.onSurfaceVariant }]}
             >
-              <IconButton
-                icon={isPlaying ? 'pause' : 'play'}
-                size={28}
-                iconColor={theme.onPrimary}
-                style={styles.playBtnIcon}
-              />
-            </Pressable>
-            <Text style={[styles.wpmLabel, { color: theme.onSurfaceVariant }]}>
-              {wpm} WPM
+              {progress.toFixed(1)}%
+            </Text>
+            <Text
+              style={[styles.progressText, { color: theme.onSurfaceVariant }]}
+            >
+              {timeRemaining}
             </Text>
           </View>
-
-          <Pressable
-            onPress={() => setWpm(c => Math.min(MAX_WPM, c + WPM_STEP))}
-            style={[styles.wpmBtn, { borderColor: theme.outline }]}
-          >
-            <Text
-              style={{
-                color: theme.onSurface,
-                fontSize: 20,
-                fontWeight: 'bold',
-              }}
-            >
-              +
-            </Text>
-          </Pressable>
-        </View>
-
-        <View style={styles.controlsEdge}>
-          <IconButton
-            icon="cog"
-            size={22}
-            iconColor={theme.onSurfaceVariant}
-            onPress={openBottomSheet}
-            style={{ margin: 0 }}
+          <Slider
+            style={styles.progressSlider}
+            minimumValue={0}
+            maximumValue={Math.max(words.length - 1, 1)}
+            value={currentIndex}
+            onSlidingStart={() => setIsPlaying(false)}
+            onSlidingComplete={val => {
+              const idx = Math.round(val);
+              setCurrentIndex(idx);
+              indexRef.current = idx;
+            }}
+            minimumTrackTintColor={theme.primary}
+            maximumTrackTintColor={theme.surfaceVariant}
+            thumbTintColor={theme.primary}
           />
         </View>
+      )}
+
+      {/* Controls */}
+      <View style={isLandscape ? styles.controlsLandscape : styles.controls}>
+        {isLandscape ? (
+          <>
+            {/* Top section — pushes content to bottom so play stays centered */}
+            <View style={styles.controlsLandscapeEdgeTop}>
+              <Pressable
+                onPress={() => setWpm(c => Math.max(MIN_WPM, c - WPM_STEP))}
+                style={[styles.wpmBtn, { borderColor: theme.outline }]}
+              >
+                <Text style={[styles.wpmBtnText, { color: theme.onSurface }]}>
+                  −
+                </Text>
+              </Pressable>
+            </View>
+
+            {/* Center — play button */}
+            <View style={styles.playCol}>
+              <Pressable
+                onPress={togglePlay}
+                style={[styles.playButton, { backgroundColor: theme.primary }]}
+              >
+                <IconButton
+                  icon={isPlaying ? 'pause' : 'play'}
+                  size={28}
+                  iconColor={theme.onPrimary}
+                  style={styles.playBtnIcon}
+                />
+              </Pressable>
+              <Text
+                style={[styles.wpmLabel, { color: theme.onSurfaceVariant }]}
+              >
+                {wpm} WPM
+              </Text>
+            </View>
+
+            {/* Bottom section — pushes content to top so play stays centered */}
+            <View style={styles.controlsLandscapeEdgeBottom}>
+              <Pressable
+                onPress={() => setWpm(c => Math.min(MAX_WPM, c + WPM_STEP))}
+                style={[styles.wpmBtn, { borderColor: theme.outline }]}
+              >
+                <Text style={[styles.wpmBtnText, { color: theme.onSurface }]}>
+                  +
+                </Text>
+              </Pressable>
+              <IconButton
+                icon="cog"
+                size={22}
+                iconColor={theme.onSurfaceVariant}
+                onPress={openBottomSheet}
+                style={{ margin: 0 }}
+              />
+            </View>
+          </>
+        ) : (
+          <>
+            <View style={styles.controlsEdge} />
+
+            <View style={styles.controlsCenter}>
+              <Pressable
+                onPress={() => setWpm(c => Math.max(MIN_WPM, c - WPM_STEP))}
+                style={[styles.wpmBtn, { borderColor: theme.outline }]}
+              >
+                <Text style={[styles.wpmBtnText, { color: theme.onSurface }]}>
+                  −
+                </Text>
+              </Pressable>
+
+              <View style={styles.playCol}>
+                <Pressable
+                  onPress={togglePlay}
+                  style={[
+                    styles.playButton,
+                    { backgroundColor: theme.primary },
+                  ]}
+                >
+                  <IconButton
+                    icon={isPlaying ? 'pause' : 'play'}
+                    size={28}
+                    iconColor={theme.onPrimary}
+                    style={styles.playBtnIcon}
+                  />
+                </Pressable>
+                <Text
+                  style={[styles.wpmLabel, { color: theme.onSurfaceVariant }]}
+                >
+                  {wpm} WPM
+                </Text>
+              </View>
+
+              <Pressable
+                onPress={() => setWpm(c => Math.min(MAX_WPM, c + WPM_STEP))}
+                style={[styles.wpmBtn, { borderColor: theme.outline }]}
+              >
+                <Text style={[styles.wpmBtnText, { color: theme.onSurface }]}>
+                  +
+                </Text>
+              </Pressable>
+            </View>
+
+            <View style={styles.controlsEdge}>
+              <IconButton
+                icon="cog"
+                size={22}
+                iconColor={theme.onSurfaceVariant}
+                onPress={openBottomSheet}
+                style={{ margin: 0 }}
+              />
+            </View>
+          </>
+        )}
       </View>
-    </>
+    </View>
   );
 
   return (
@@ -837,159 +1044,226 @@ const RSVPReader = ({ visible, onClose }: RSVPReaderProps) => {
         backgroundColor={theme.surface}
         barStyle={theme.isDark ? 'light-content' : 'dark-content'}
       />
-      <View style={[styles.container, { backgroundColor: theme.surface }]}>
-        {/* Header */}
-        <View style={styles.header}>
-          <IconButton
-            icon="close"
-            size={24}
-            iconColor={theme.onSurface}
-            onPress={handleClose}
-          />
-          <Text
-            numberOfLines={1}
-            style={[styles.headerTitle, { color: theme.onSurface }]}
+      <View
+        style={[
+          isLandscape ? styles.containerLandscape : styles.container,
+          { backgroundColor: theme.surface },
+        ]}
+      >
+        {/* Header — animated hide */}
+        <Animated.View
+          style={[
+            { opacity: controlsAnim },
+            isLandscape && { justifyContent: 'center' },
+          ]}
+          pointerEvents={controlsVisible ? 'auto' : 'none'}
+        >
+          {renderHeader()}
+        </Animated.View>
+
+        {/* Display area — tap to pause */}
+        <Pressable style={styles.displayArea} onPress={handleDisplayTap}>
+          {renderDisplay()}
+        </Pressable>
+
+        {/* Bottom bar — animated hide */}
+        <Animated.View
+          style={[
+            { opacity: controlsAnim },
+            isLandscape && { alignSelf: 'stretch' },
+          ]}
+          pointerEvents={controlsVisible ? 'auto' : 'none'}
+        >
+          {renderBottomBar()}
+        </Animated.View>
+
+        {/* Landscape progress info — bottom center overlay */}
+        {isLandscape && (
+          <Animated.View
+            style={[styles.progressOverlay, { opacity: controlsAnim }]}
+            pointerEvents="none"
           >
-            RSVP — {chapter.name}
-          </Text>
-          <View style={styles.headerSpacer} />
-        </View>
-
-        {renderBody()}
-
-        {/* Bottom sheet overlay */}
-        {showBottomSheet && (
-          <View style={StyleSheet.absoluteFill}>
-            {/* Backdrop */}
-            <Pressable
-              style={styles.sheetBackdrop}
-              onPress={closeBottomSheet}
-            />
-            {/* Sheet */}
-            <Animated.View
-              style={[
-                styles.sheetContainer,
-                { backgroundColor: theme.surface },
-                {
-                  transform: [
-                    {
-                      translateY: sheetAnim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [400, 0],
-                      }),
-                    },
-                  ],
-                },
-              ]}
-            >
-              {/* Handle */}
-              <View style={styles.sheetHandle}>
-                <View
-                  style={[
-                    styles.sheetHandleBar,
-                    { backgroundColor: theme.outline },
-                  ]}
-                />
-              </View>
-
-              <ScrollView
-                style={styles.sheetScroll}
-                showsVerticalScrollIndicator={false}
-              >
-                {/* Toggles */}
-                <View style={styles.sheetSection}>
-                  <View style={styles.sheetRow}>
-                    <Text
-                      style={[styles.sheetLabel, { color: theme.onSurface }]}
-                    >
-                      Bionic Reading
-                    </Text>
-                    <Switch
-                      value={bionic}
-                      onValueChange={setBionic}
-                      color={theme.primary}
-                    />
-                  </View>
-                  <View style={styles.sheetRow}>
-                    <Text
-                      style={[styles.sheetLabel, { color: theme.onSurface }]}
-                    >
-                      Word Chunking
-                    </Text>
-                    <Switch
-                      value={chunking}
-                      onValueChange={setChunking}
-                      color={theme.primary}
-                    />
-                  </View>
-                </View>
-
-                {/* Font size */}
-                <View style={styles.sheetSection}>
-                  <Text
-                    style={[
-                      styles.sheetSectionTitle,
-                      { color: theme.onSurfaceVariant },
-                    ]}
-                  >
-                    Font Size
-                  </Text>
-                  <View style={styles.sheetSliderRow}>
-                    <Text
-                      style={[styles.sheetValue, { color: theme.onSurface }]}
-                    >
-                      {fontSize}
-                    </Text>
-                    <Slider
-                      style={styles.sheetSlider}
-                      minimumValue={MIN_FONT}
-                      maximumValue={MAX_FONT}
-                      step={2}
-                      value={fontSize}
-                      onValueChange={setFontSize}
-                      minimumTrackTintColor={theme.primary}
-                      maximumTrackTintColor={theme.outline}
-                      thumbTintColor={theme.primary}
-                    />
-                  </View>
-                </View>
-
-                {/* Line spacing */}
-                <View style={styles.sheetSection}>
-                  <Text
-                    style={[
-                      styles.sheetSectionTitle,
-                      { color: theme.onSurfaceVariant },
-                    ]}
-                  >
-                    Line Spacing
-                  </Text>
-                  <View style={styles.sheetSliderRow}>
-                    <Text
-                      style={[styles.sheetValue, { color: theme.onSurface }]}
-                    >
-                      {lineSpacing.toFixed(2)}
-                    </Text>
-                    <Slider
-                      style={styles.sheetSlider}
-                      minimumValue={MIN_LINE_SPACING}
-                      maximumValue={MAX_LINE_SPACING}
-                      step={0.25}
-                      value={lineSpacing}
-                      onValueChange={v =>
-                        setLineSpacing(Math.round(v * 100) / 100)
-                      }
-                      minimumTrackTintColor={theme.primary}
-                      maximumTrackTintColor={theme.outline}
-                      thumbTintColor={theme.primary}
-                    />
-                  </View>
-                </View>
-              </ScrollView>
-            </Animated.View>
-          </View>
+            {renderProgressInfo()}
+          </Animated.View>
         )}
       </View>
+
+      {/* Bottom sheet overlay — above everything */}
+      {showBottomSheet && (
+        <View style={StyleSheet.absoluteFill}>
+          {/* Backdrop */}
+          <Pressable style={styles.sheetBackdrop} onPress={closeBottomSheet} />
+          {/* Sheet */}
+          <Animated.View
+            style={[
+              styles.sheetContainer,
+              { backgroundColor: theme.surface },
+              {
+                transform: [
+                  {
+                    translateY: sheetAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [400, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            {/* Handle */}
+            <View style={styles.sheetHandle}>
+              <View
+                style={[
+                  styles.sheetHandleBar,
+                  { backgroundColor: theme.outline },
+                ]}
+              />
+            </View>
+
+            <ScrollView
+              style={styles.sheetScroll}
+              showsVerticalScrollIndicator={false}
+            >
+              {/* Toggles */}
+              <View style={styles.sheetSection}>
+                <View style={styles.sheetRow}>
+                  <Text style={[styles.sheetLabel, { color: theme.onSurface }]}>
+                    Bionic Reading
+                  </Text>
+                  <Switch
+                    value={bionic}
+                    onValueChange={setBionic}
+                    color={theme.primary}
+                  />
+                </View>
+                <View style={styles.sheetRow}>
+                  <Text style={[styles.sheetLabel, { color: theme.onSurface }]}>
+                    Word Chunking
+                  </Text>
+                  <Switch
+                    value={chunking}
+                    onValueChange={setChunking}
+                    color={theme.primary}
+                  />
+                </View>
+              </View>
+
+              {/* Font family */}
+              <View style={styles.sheetSection}>
+                <Text
+                  style={[
+                    styles.sheetSectionTitle,
+                    { color: theme.onSurfaceVariant },
+                  ]}
+                >
+                  Font
+                </Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.fontScrollView}
+                >
+                  <View style={styles.fontChipRow}>
+                    {readerFonts.map(f => {
+                      const active = fontFamily === f.fontFamily;
+                      return (
+                        <Pressable
+                          key={f.fontFamily || '__default'}
+                          onPress={() => setFontFamily(f.fontFamily)}
+                          style={[
+                            styles.fontChip,
+                            {
+                              backgroundColor: active
+                                ? color(theme.primary).alpha(0.15).string()
+                                : 'transparent',
+                              borderColor: active
+                                ? theme.primary
+                                : theme.outline,
+                            },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.fontChipText,
+                              {
+                                fontWeight: active ? '600' : '400',
+                                color: active
+                                  ? theme.primary
+                                  : theme.onSurfaceVariant,
+                                fontFamily: f.fontFamily || undefined,
+                              },
+                            ]}
+                          >
+                            {f.name}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </ScrollView>
+              </View>
+
+              {/* Font size */}
+              <View style={styles.sheetSection}>
+                <Text
+                  style={[
+                    styles.sheetSectionTitle,
+                    { color: theme.onSurfaceVariant },
+                  ]}
+                >
+                  Font Size
+                </Text>
+                <View style={styles.sheetSliderRow}>
+                  <Text style={[styles.sheetValue, { color: theme.onSurface }]}>
+                    {fontSize}
+                  </Text>
+                  <Slider
+                    style={styles.sheetSlider}
+                    minimumValue={MIN_FONT}
+                    maximumValue={MAX_FONT}
+                    step={2}
+                    value={fontSize}
+                    onValueChange={setFontSize}
+                    minimumTrackTintColor={theme.primary}
+                    maximumTrackTintColor={theme.outline}
+                    thumbTintColor={theme.primary}
+                  />
+                </View>
+              </View>
+
+              {/* Line spacing */}
+              <View style={styles.sheetSection}>
+                <Text
+                  style={[
+                    styles.sheetSectionTitle,
+                    { color: theme.onSurfaceVariant },
+                  ]}
+                >
+                  Line Spacing
+                </Text>
+                <View style={styles.sheetSliderRow}>
+                  <Text style={[styles.sheetValue, { color: theme.onSurface }]}>
+                    {lineSpacing.toFixed(2)}
+                  </Text>
+                  <Slider
+                    style={styles.sheetSlider}
+                    minimumValue={MIN_LINE_SPACING}
+                    maximumValue={MAX_LINE_SPACING}
+                    step={0.25}
+                    value={lineSpacing}
+                    onValueChange={v =>
+                      setLineSpacing(Math.round(v * 100) / 100)
+                    }
+                    minimumTrackTintColor={theme.primary}
+                    maximumTrackTintColor={theme.outline}
+                    thumbTintColor={theme.primary}
+                  />
+                </View>
+              </View>
+            </ScrollView>
+          </Animated.View>
+        </View>
+      )}
     </Modal>
   );
 };
@@ -1000,56 +1274,47 @@ export default React.memo(RSVPReader);
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  containerLandscape: { flex: 1, flexDirection: 'row' },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingTop: 8,
     paddingHorizontal: 4,
   },
-  headerTitle: {
+  headerLandscape: {
     flex: 1,
-    fontSize: 16,
-    fontWeight: '600',
-    textAlign: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+    gap: 12,
+  },
+  backButtonLandscape: {
+    position: 'absolute',
+    top: 8,
+    left: 0,
+    margin: 0,
   },
   headerSpacer: { width: 48 },
-
-  /* Landscape layout — compact horizontal settings bar */
-  landscapeSettingsBar: {
-    maxHeight: 52,
-    flexGrow: 0,
-  },
-  landscapeSettingsBarContent: {
-    alignItems: 'center',
-    paddingHorizontal: 8,
-  },
-  settingsRowLandscape: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 4,
-  },
-
-  /* Settings (portrait) */
-  settingsRow: {
-    paddingHorizontal: 12,
-    paddingTop: 6,
-    gap: 8,
-  },
   viewStyleRow: {
+    flex: 1,
     flexDirection: 'row',
     justifyContent: 'center',
     gap: 6,
   },
-  viewStyleChip: {
-    flexDirection: 'row',
+  viewStyleRowLandscape: {
     alignItems: 'center',
+    gap: 6,
+  },
+  viewStyleChip: {
+    alignItems: 'center',
+    justifyContent: 'center',
     borderRadius: 16,
     borderWidth: 1,
-    paddingRight: 10,
-    paddingVertical: 2,
+    width: 36,
+    height: 36,
   },
-  chipIcon: { margin: 0, marginLeft: 4 },
+  chipIcon: { margin: 0 },
   /* Display */
   displayArea: { flex: 1, justifyContent: 'center' },
 
@@ -1123,8 +1388,28 @@ const styles = StyleSheet.create({
     width: '100%',
     marginBottom: 4,
   },
+  progressInfoLandscape: {
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'center',
+  },
+  progressOverlay: {
+    position: 'absolute',
+    bottom: 12,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
   progressText: { fontSize: 12 },
   progressSlider: { width: '100%', height: 30 },
+
+  /* Landscape bottom bar (right side column) */
+  bottomBarLandscape: {
+    flex: 1,
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 12,
+  },
 
   /* Controls: three-column layout so play stays centered */
   controls: {
@@ -1134,10 +1419,29 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
     paddingHorizontal: 12,
   },
+  controlsLandscape: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+  },
   controlsEdge: {
     width: 48,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  controlsLandscapeEdgeTop: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    paddingBottom: 12,
+  },
+  controlsLandscapeEdgeBottom: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    paddingTop: 12,
+    gap: 12,
   },
   controlsCenter: {
     flex: 1,
@@ -1154,6 +1458,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  wpmBtnText: { fontSize: 20, fontWeight: 'bold' },
   playCol: {
     alignItems: 'center',
     gap: 2,
@@ -1229,6 +1534,17 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 36,
   },
+  fontScrollView: { marginTop: 4 },
+  fontChipRow: { flexDirection: 'row', gap: 6 },
+  fontChip: {
+    borderRadius: 16,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fontChipText: { fontSize: 13 },
   sheetValue: {
     fontSize: 14,
     fontWeight: 'bold',
